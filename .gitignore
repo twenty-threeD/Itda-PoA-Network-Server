@@ -1,0 +1,14 @@
+# Build output
+/build/
+/bin/
+*.test
+
+# Local node data and keys — never commit these
+/.itda/
+*.db
+node_modules/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
