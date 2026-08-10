@@ -1,0 +1,17 @@
+syntax = "proto3";
+package itda.poa.v1;
+
+import "gogoproto/gogo.proto";
+import "itda/poa/v1/poa.proto";
+
+option go_package = "github.com/twenty-threeD/Itda-PoA-Network-Server/x/poa/types";
+
+// GenesisState is the initial Proof-of-Authority state of the chain.
+message GenesisState {
+  // params defines the module parameters at genesis.
+  Params params = 1 [(gogoproto.nullable) = false];
+
+  // validators is the founding authority set. It must be non-empty, otherwise
+  // the chain would start with no one able to produce blocks.
+  repeated Validator validators = 2 [(gogoproto.nullable) = false];
+}
