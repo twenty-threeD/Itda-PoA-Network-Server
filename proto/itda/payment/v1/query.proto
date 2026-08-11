@@ -1,0 +1,47 @@
+syntax = "proto3";
+package itda.payment.v1;
+
+import "gogoproto/gogo.proto";
+import "google/api/annotations.proto";
+import "cosmos/base/query/v1beta1/pagination.proto";
+import "amino/amino.proto";
+import "itda/payment/v1/payment.proto";
+
+option go_package = "github.com/twenty-threeD/Itda-PoA-Network-Server/x/payment/types";
+
+service Query {
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/itda/payment/v1/params";
+  }
+
+  rpc Payment(QueryPaymentRequest) returns (QueryPaymentResponse) {
+    option (google.api.http).get = "/itda/payment/v1/payments/{order_id}";
+  }
+
+  rpc Payments(QueryPaymentsRequest) returns (QueryPaymentsResponse) {
+    option (google.api.http).get = "/itda/payment/v1/payments";
+  }
+}
+
+message QueryParamsRequest {}
+
+message QueryParamsResponse {
+  Params params = 1 [(gogoproto.nullable) = false, (amino.dont_omitempty) = true];
+}
+
+message QueryPaymentRequest {
+  string order_id = 1;
+}
+
+message QueryPaymentResponse {
+  PaymentRecord record = 1 [(gogoproto.nullable) = false];
+}
+
+message QueryPaymentsRequest {
+  cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+message QueryPaymentsResponse {
+  repeated PaymentRecord records = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
