@@ -2,11 +2,25 @@
 /build/
 /bin/
 *.test
+*.out
+coverage.txt
 
 # Local node data and keys — never commit these
 /.itda/
 *.db
 node_modules/
+*.pem
+*.key
+node_key.json
+priv_validator_key.json
+priv_validator_state.json
+.env
+.env.*
+
+# Tooling / local agent config
+.claude
+CLAUDE.md
+.mcp.json
 
 # Editor / OS
 .DS_Store

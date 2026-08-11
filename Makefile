@@ -14,6 +14,7 @@ all: proto-gen build
 tools:
 	go install github.com/bufbuild/buf/cmd/buf@v1.50.0
 	go install github.com/cosmos/gogoproto/protoc-gen-gocosmos@v1.7.2
+	go install github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway@v1.16.0
 
 ## proto-gen: regenerate *.pb.go from proto/ into x/<module>/types/
 # buf writes into the full go_package path, so the tree is flattened back
