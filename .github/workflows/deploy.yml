@@ -1,0 +1,74 @@
+name: Deploy
+
+on:
+  push:
+    branches: [develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-node
+  cancel-in-progress: false
+
+env:
+  APP_NAME: itdad
+  # 대상 서버: OCI ap-chuncheon-1 / Rocky Linux 9 x86_64
+  TARGET_GOARCH: amd64
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build linux binary
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=${TARGET_GOARCH} \
+            go build -trimpath -ldflags "-s -w" \
+            -o build/${APP_NAME} ./cmd/${APP_NAME}
+
+      - name: Upload binary to server
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          source: build/itdad
+          target: /tmp/itdad-deploy/
+          strip_components: 1
+
+      - name: Install and restart service
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          script: |
+            set -e
+            sudo install -m 0755 /tmp/itdad-deploy/itdad /usr/local/bin/itdad
+            sudo restorecon /usr/local/bin/itdad || true
+            rm -rf /tmp/itdad-deploy
+
+            # 노드 홈이 초기화되기 전에 재시작하면 기동에 실패한다.
+            # 제네시스는 체인 정체성을 결정하므로 CI 가 자동 생성하지 않는다.
+            if [ ! -f /var/lib/itdad/config/genesis.json ]; then
+              echo "노드 홈이 초기화되지 않았습니다. 바이너리만 설치하고 재시작은 건너뜁니다."
+              echo "서버에서 'itdad init' 으로 제네시스를 만든 뒤 서비스를 시작하십시오."
+              exit 0
+            fi
+
+            sudo systemctl restart itdad
+            sleep 3
+            sudo systemctl is-active itdad
+            journalctl -u itdad -n 20 --no-pager -q
