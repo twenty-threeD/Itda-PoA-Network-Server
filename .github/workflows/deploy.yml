@@ -1,0 +1,81 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  APP_NAME: itdad
+  # 대상 서버: OCI ap-chuncheon-1 / Rocky Linux 9 x86_64
+  TARGET_GOARCH: amd64
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      # cmd/itdad 가 아직 없는 동안은 배포를 조용히 스킵한다.
+      - name: Check binary target exists
+        id: target
+        run: |
+          if [ -d "cmd/${APP_NAME}" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::cmd/${APP_NAME} not found - skipping deploy"
+          fi
+
+      - uses: actions/setup-go@v5
+        if: steps.target.outputs.exists == 'true'
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test
+        if: steps.target.outputs.exists == 'true'
+        run: go test ./...
+
+      - name: Build linux binary
+        if: steps.target.outputs.exists == 'true'
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=${TARGET_GOARCH} \
+            go build -trimpath -ldflags "-s -w" \
+            -o build/${APP_NAME} ./cmd/${APP_NAME}
+
+      - name: Upload binary to server
+        if: steps.target.outputs.exists == 'true'
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          source: build/itdad
+          target: /tmp/itdad-deploy/
+          strip_components: 1
+
+      - name: Install and restart service
+        if: steps.target.outputs.exists == 'true'
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          script: |
+            set -e
+            sudo install -m 0755 /tmp/itdad-deploy/itdad /usr/local/bin/itdad
+            sudo restorecon /usr/local/bin/itdad || true
+            rm -rf /tmp/itdad-deploy
+            sudo systemctl restart itdad
+            sleep 3
+            sudo systemctl is-active itdad
