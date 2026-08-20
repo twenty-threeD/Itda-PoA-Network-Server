@@ -1,0 +1,26 @@
+[Unit]
+Description=Itda PoA Network Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=itda
+Group=itda
+ExecStart=/usr/local/bin/itdad start --home /var/lib/itdad
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+# 상태/데이터 디렉터리
+StateDirectory=itdad
+WorkingDirectory=/var/lib/itdad
+
+# 보안 강화
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
