@@ -2,7 +2,7 @@ name: Deploy
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
 
 permissions:
   contents: read
@@ -76,6 +76,16 @@ jobs:
             sudo install -m 0755 /tmp/itdad-deploy/itdad /usr/local/bin/itdad
             sudo restorecon /usr/local/bin/itdad || true
             rm -rf /tmp/itdad-deploy
+
+            # 노드 홈이 초기화되기 전에 재시작하면 기동에 실패한다.
+            # 제네시스는 체인 정체성을 결정하므로 CI 가 자동 생성하지 않는다.
+            if [ ! -f /var/lib/itdad/config/genesis.json ]; then
+              echo "노드 홈이 초기화되지 않았습니다. 바이너리만 설치하고 재시작은 건너뜁니다."
+              echo "서버에서 'itdad init' 으로 제네시스를 만든 뒤 서비스를 시작하십시오."
+              exit 0
+            fi
+
             sudo systemctl restart itdad
             sleep 3
             sudo systemctl is-active itdad
+            journalctl -u itdad -n 20 --no-pager -q
