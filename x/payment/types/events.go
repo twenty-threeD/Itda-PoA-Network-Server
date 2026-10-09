@@ -8,4 +8,5 @@ const (
 	AttributeKeyBuyerAddress   = "buyer_address"
 	AttributeKeyAmount         = "amount"
 	AttributeKeyRecordedHeight = "recorded_height"
+	AttributeKeyRecorder       = "recorder"
 )
