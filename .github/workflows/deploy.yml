@@ -85,7 +85,12 @@ jobs:
               exit 0
             fi
 
-            sudo systemctl restart itdad
-            sleep 3
-            sudo systemctl is-active itdad
-            journalctl -u itdad -n 20 --no-pager -q
+            # Every validator process on this host shares /usr/local/bin/itdad.
+            # Restart them one at a time so the chain keeps > 2/3 voting power
+            # online, and so no process keeps running the old binary.
+            for unit in $(systemctl list-units --type=service --state=active --plain --no-legend 'itdad*.service' | awk '{print $1}'); do
+              sudo systemctl restart "$unit"
+              sleep 10
+              sudo systemctl is-active "$unit"
+              journalctl -u "$unit" -n 5 --no-pager -q
+            done

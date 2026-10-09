@@ -10,6 +10,11 @@ option go_package = "github.com/twenty-threeD/Itda-PoA-Network-Server/x/payment/
 message Params {
   option (amino.name) = "itda/x/payment/Params";
   option (gogoproto.equal) = true;
+
+  // recorders are accounts allowed to submit MsgRecordPayment in addition to
+  // the module authority. Only the authority can change this list, through
+  // MsgUpdateParams.
+  repeated string recorders = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
 }
 
 message PaymentRecord {

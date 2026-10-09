@@ -5,6 +5,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+
 	"github.com/twenty-threeD/Itda-PoA-Network-Server/x/payment/keeper"
 	"github.com/twenty-threeD/Itda-PoA-Network-Server/x/payment/testutil"
 	"github.com/twenty-threeD/Itda-PoA-Network-Server/x/payment/types"
@@ -166,4 +168,122 @@ func TestGenesisRoundTrip(t *testing.T) {
 	reimported, err := fresh.GetRecord(freshCtx, exported.Records[0].OrderId)
 	require.NoError(t, err)
 	require.Equal(t, exported.Records[0], reimported)
+}
+
+func TestRecordPaymentByRecorder(t *testing.T) {
+	recorder := testutil.NewAccAddress("recorder")
+
+	t.Run("accepts a registered recorder as submitter", func(t *testing.T) {
+		// Given
+		k, ctx := testutil.NewKeeper(t)
+		msgServer := keeper.NewMsgServerImpl(k)
+		_, err := msgServer.UpdateParams(ctx, &types.MsgUpdateParams{
+			Authority: testutil.Authority,
+			Params:    types.Params{Recorders: []string{recorder}},
+		})
+		require.NoError(t, err)
+
+		msg := testutil.NewRecordMsg(func(m *types.MsgRecordPayment) { m.Authority = recorder })
+
+		// When
+		_, err = msgServer.RecordPayment(ctx, msg)
+
+		// Then
+		require.NoError(t, err)
+
+		has, err := k.HasRecord(ctx, msg.OrderId)
+		require.NoError(t, err)
+		require.True(t, has)
+	})
+
+	t.Run("rejects a recorder after it is removed from params", func(t *testing.T) {
+		// Given
+		k, ctx := testutil.NewKeeper(t)
+		msgServer := keeper.NewMsgServerImpl(k)
+		require.NoError(t, k.SetParams(ctx, types.Params{Recorders: []string{recorder}}))
+		require.NoError(t, k.SetParams(ctx, types.DefaultParams()))
+
+		msg := testutil.NewRecordMsg(func(m *types.MsgRecordPayment) { m.Authority = recorder })
+
+		// When
+		_, err := msgServer.RecordPayment(ctx, msg)
+
+		// Then
+		require.ErrorContains(t, err, "invalid authority")
+	})
+
+	t.Run("keeps accepting the authority when recorders are set", func(t *testing.T) {
+		// Given
+		k, ctx := testutil.NewKeeper(t)
+		msgServer := keeper.NewMsgServerImpl(k)
+		require.NoError(t, k.SetParams(ctx, types.Params{Recorders: []string{recorder}}))
+
+		// When
+		_, err := msgServer.RecordPayment(ctx, testutil.NewRecordMsg())
+
+		// Then
+		require.NoError(t, err)
+	})
+}
+
+func TestUpdateParams(t *testing.T) {
+	recorder := testutil.NewAccAddress("recorder")
+
+	t.Run("rejects a recorder trying to change the recorder list", func(t *testing.T) {
+		// Given
+		k, ctx := testutil.NewKeeper(t)
+		msgServer := keeper.NewMsgServerImpl(k)
+		require.NoError(t, k.SetParams(ctx, types.Params{Recorders: []string{recorder}}))
+
+		// When
+		_, err := msgServer.UpdateParams(ctx, &types.MsgUpdateParams{
+			Authority: recorder,
+			Params:    types.Params{Recorders: []string{recorder, testutil.NewAccAddress("intruder")}},
+		})
+
+		// Then
+		require.ErrorContains(t, err, "invalid authority")
+
+		params, err := k.GetParams(ctx)
+		require.NoError(t, err)
+		require.Equal(t, []string{recorder}, params.Recorders)
+	})
+
+	testCases := []struct {
+		name      string
+		recorders []string
+		expectErr error
+	}{
+		{
+			name:      "rejects a duplicate recorder",
+			recorders: []string{recorder, recorder},
+			expectErr: types.ErrDuplicateRecorder,
+		},
+		{
+			name:      "rejects a non bech32 recorder",
+			recorders: []string{"not-a-bech32-address"},
+			expectErr: sdkerrors.ErrInvalidAddress,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Given
+			k, ctx := testutil.NewKeeper(t)
+			msgServer := keeper.NewMsgServerImpl(k)
+
+			// When
+			_, err := msgServer.UpdateParams(ctx, &types.MsgUpdateParams{
+				Authority: testutil.Authority,
+				Params:    types.Params{Recorders: tc.recorders},
+			})
+
+			// Then
+			require.ErrorIs(t, err, tc.expectErr)
+
+			params, err := k.GetParams(ctx)
+			require.NoError(t, err)
+			require.Empty(t, params.Recorders)
+		})
+	}
 }

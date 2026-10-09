@@ -27,9 +27,17 @@ func (k msgServer) RecordPayment(ctx context.Context, msg *types.MsgRecordPaymen
 		return nil, errorsmod.Wrap(types.ErrNoAuthority, err.Error())
 	}
 
+	// The authority path must not touch params: replaying historical blocks
+	// with this binary has to consume exactly the same gas as before.
 	if authority != msg.Authority {
-		return nil, errorsmod.Wrapf(govtypes.ErrInvalidSigner,
-			"invalid authority; expected %s, got %s", authority, msg.Authority)
+		params, err := k.GetParams(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !params.IsRecorder(msg.Authority) {
+			return nil, errorsmod.Wrapf(govtypes.ErrInvalidSigner,
+				"invalid authority; %s is neither the module authority nor a registered recorder", msg.Authority)
+		}
 	}
 
 	if _, err := k.addressCodec.StringToBytes(msg.BuyerAddress); err != nil {
@@ -63,6 +71,7 @@ func (k msgServer) RecordPayment(ctx context.Context, msg *types.MsgRecordPaymen
 			sdk.NewAttribute(types.AttributeKeyBuyerAddress, record.BuyerAddress),
 			sdk.NewAttribute(types.AttributeKeyAmount, fmt.Sprintf("%d", record.Amount)),
 			sdk.NewAttribute(types.AttributeKeyRecordedHeight, fmt.Sprintf("%d", record.RecordedHeight)),
+			sdk.NewAttribute(types.AttributeKeyRecorder, msg.Authority),
 		),
 	)
 
